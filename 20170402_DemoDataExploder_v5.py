@@ -46,18 +46,17 @@ for idx, year in enumerate(years):
 
 #manually set indices for each weekday/year combo
 indy_dict = {'Mon':[0,7,14,21,28],'Tues':[1,8,15,22,29],'Wed':[2,9,16,23,30],'Thur':[3,10,17,24,31],'Fri':[4,11,18,25,32],'Sat':[5,12,19,26,33],'Sun':[6,13,20,27,34]}
+#daily volumes + variability by weekday
 avgVar_dict = {'Mon':[260,45],'Tues':[277,41],'Wed':[250,20],'Thur':[230,30],'Fri':[223,35],'Sat':[150,20],'Sun':[145,20]}
 
 #create master list of all possible indices from source (option: row level or ID level of detail)
-#row level
+    #row level
 #df1_idx = df1.index.values.tolist()
-#ID level; specify ID; e.g. 'Uniqueid'
+    #ID level; specify ID; e.g. 'Uniqueid'
 df1_idx = df1['Uniqueid'].unique().tolist()
 
 #YoY growth; for now this is the same across all years; enhance later to vary by year
 growth = [[1.0,.03],[1.15,.05],[1.175,.07],[1.20,.09],[1.225,.10]]
-#growth[0][0]=1
-#growth[0][1]=.03
 
 #function that returns dataframe of random indices (given list "df1_idx") and associated date (given date)
 def df_builder(indices,rows,date):
@@ -65,7 +64,7 @@ def df_builder(indices,rows,date):
     df_tmp = pd.DataFrame()
     tmp = random.sample(indices,rows)
     df_tmp['indices'] = tmp
-    df_tmp['date'] = date
+    df_tmp['Admit_DT'] = date
     return(df_tmp)
 
 #containers
@@ -108,15 +107,114 @@ DemoData = pd.merge(df1, output2, on='Uniqueid', how='inner')
 #create quantities for both dist and tail for LOS
 #use this for discharge dates
 df_rows = len(DemoData)
-print("rows: ",df_rows)
+print("total rows: ",df_rows)
 df_dist = int(len(DemoData) * 0.8)
 print("Normdist: ",df_dist)
 df_tail = df_rows - df_dist
 print("tail: ",df_tail)
 
+#two distributions for discharge dates so the LOS bins are realistic
+
+total = len(DemoData)
+
+N1 = int(len(DemoData) * 0.8)
+N2 = total - N1
+
+#20% of population have higher LOS with greater variability
+mu1, sigma1 = 150, 80 # mean and standard deviation
+tmp_n1 = np.random.normal(mu1, sigma1, N2)
+
+#80% of population have pretty similar LOS
+mu2, sigma2 = 0, 1 # mean and standard deviation
+tmp_n2 = np.random.normal(mu2, sigma2, N1)
+
+df_a = pd.DataFrame()
+df_a['a'] = tmp_n1
+df_a['a'] = abs(df_a['a'])
+#comment out below line if you want some LOS=0 days
+df_a['a'] = df_a['a']+1
+df_a['a'] = df_a['a'].astype(int)
+a_list = df_a['a'].tolist()
+
+df_b = pd.DataFrame()
+df_b['b'] = tmp_n2
+df_b['b'] = abs(df_b['b'])
+df_b['b'] = df_b['b']*15
+#comment out below line if you want some LOS=0 days
+df_b['b'] = df_b['b']+1
+df_b['b'] = df_b['b'].astype(int)
+b_list = df_b['b'].tolist()
+
+total_list = a_list + b_list
+
+DemoData['delta'] = total_list
+
+DemoData['Disch_DT'] = DemoData['Admit_DT'] + DemoData['delta'].map(dt.timedelta)
+DemoData = DemoData.drop('delta', axis=1)
+
+#ENHANCE THIS LATER TO REDUCE NUMBER OF NULLS; MAYBE THIS WOULD BE REALISTIC DATA THOUGH; 14K 'Disch_DT' NULLS CURRENTLY
+#clear out any discharges beyond current date
+DemoData.ix[DemoData.Disch_DT >= today,'Disch_DT'] = np.NaN
 
 
+#ENHANCE THIS LATER FOR TRUE READMITS
+#create unique MRN for every row; if you want true reAdmits adjust total to <total
+mrn = []
+mrn = random.sample(range(1000000, 9999999), total)
+DemoData['MRN'] = mrn
+
+#create list of unique diabetes releated diagnosis by searching 'DRG Text' column
+uniqueDiabetes2 = DemoData[DemoData['DRG Text'].str.contains('DIABETES')==True]['DRG Text'].tolist()
+#create list of unique months
+DemoData['Admit_month'] = DemoData['Admit_DT'].dt.month
+months = DemoData['Admit_month'].unique().tolist()
+
+#create diabetes patients @ specified % of population on monthly basis
+for month in months:
+    #random percent between 6% and 9%
+    test_frac = random.uniform(.06,.09)
+    indices = DemoData[DemoData['Admit_month']==month].sample(frac = test_frac).index.tolist()
+    for ind in indices:
+        DemoData.loc[DemoData.index==ind,'DRG Text']=random.choice(uniqueDiabetes2)
+        
+#remove legacy fields
+fields = ['Uniqueid','From Date','To Date','Length of Stay','Unique ID Join','To Day','Zip Lon','Zip Lat','Miles From Provider']
+DemoData = DemoData.drop(fields, axis=1)
+
+
+
+#new code start
+
+uniqueDiabetes22 = DemoData[DemoData['DRG Text'].str.contains('DIABETES')==True]['MRN'].tolist() 
+
+
+#Create list of indeces filtered where Admit date is >10 days old, but <90 days
+start = today - dt.timedelta(days = 90)
+end = today - dt.timedelta(days = 10)
+#index_tmp = rawDF1[(rawDF1['Admit']>=start)&(rawDF1['Admit']<end)].index.tolist()
+ID_tmp = DemoData[(DemoData['Admit_DT']>=start)&(DemoData['Admit_DT']<end)]['MRN'].tolist()
+
+# **DO IT BASED OFF ENCOUNTERID**
+# **MAKE SURE 987 OVER LAST QTR IS NOT TOO MANY DIABETES PATIENTS**
+#return set with ID's common to both <90days and DRG=diabetes
+x=set(uniqueDiabetes22).intersection(ID_tmp)
+
+#ENHANCE TO DETERMINE # BASED OFF LENGTH OF LABS FILE DF
+#randomly select 148 OR 987 indices
+x_1 = random.sample(x,987)
+len(x_1)
+
+#Give it same name for Tableau "smart" join
+df2['MRN']=pd.Series(x_1)
+
+df2.to_csv('labs.csv', index = False)
+#new code end
+
+
+
+#output files
 DemoData.to_csv(outputCSV, index = False)
+
 
 print("------------------------------------------------")
 print("------------------------------------------------")
