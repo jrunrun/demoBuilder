@@ -32,7 +32,7 @@ rawDF1.ix[rawDF1.Disch >= today,'Disch'] = np.NaN
 Flags = ['Yes','No','No','No','No']
 for index, row in rawDF1.iterrows():
     Flag = random.sample(Flags,1)
-    rawDF1.loc[index,'RA_flg'] = Flag[0]
+    rawDF1.loc[index,'Readmit'] = Flag[0]
 
 
 

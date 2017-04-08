@@ -3,6 +3,19 @@ import datetime as dt
 import numpy as np
 import random
 import math
+import time
+import locale
+
+
+
+print "Demo data exploder starting..."
+
+# Start stopwatch
+startTime = time.clock()
+# Date and Time stamp for output file
+dateTimeStamp = time.strftime("%Y%m%d_%H%M")
+#time stamp for file name
+outputCSV = dateTimeStamp + '_' + 'DemoData' + ".csv"
 
 #Read in 'Inpatient' and 'Lab Results' data
 file1 = '/Users/jcraycraft/Dropbox/Work/PreSales/Marketing/2017_HIMSS/DiabetesReAdmitDemo/Inpatient Data (RMTD) Extract.csv'
@@ -40,7 +53,8 @@ indy_dict = {'Mon':[0,7,14,21,28],'Tues':[1,8,15,22,29],'Wed':[2,9,16,23,30],'Th
 avgVar_dict = {'Mon':[260,45],'Tues':[277,41],'Wed':[250,20],'Thur':[230,30],'Fri':[223,35],'Sat':[150,20],'Sun':[145,20]}
 
 #create master list of all possible indices from source
-df1_idx = df1.index.values.tolist()
+#df1_idx = df1.index.values.tolist()
+df1_idx = df1['Uniqueid'].unique().tolist()
 
 #need YoY growth indexed
 growth = [[1.0,.03],[1.15,.05],[1.175,.07],[1.20,.09],[1.225,.10]]
@@ -129,9 +143,27 @@ for (k,v), (k2,v2) in zip(avgVar_dict.items(), indy_dict.items()):
 
     for out_val in out2:
         output2 = pd.concat(out2)
-    output2.to_csv('2017_04_06_output2_v4.csv', index = False)
 
-    data = pd.merge(output2, df_n, on='subject_id')
+    output2['Uniqueid'] = output2['indices']
+    output2.drop('indices', axis=1)      
+    output2.to_csv('2017_04_06_output2_v5.csv', index = False)
+
+df1.to_csv('2017_04_06_df1_v5.csv', index = False)
+DemoData = pd.merge(df1, output2, on='Uniqueid', how='inner')
+DemoData.to_csv(outputCSV, index = False)
+
+print("------------------------------------------------")
+print("------------------------------------------------")
+print "Demo data exploder finished..."
+
+# Output elapsed time
+print "Elapsed time:", locale.format("%.2f", time.clock() - startTime), "seconds"
+print("------------------------------------------------")
+print("------------------------------------------------")
+
+
+
+
 
 
 
