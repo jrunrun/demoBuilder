@@ -10,14 +10,10 @@ print "Demo data exploder starting..."
 
 # Start stopwatch
 startTime = time.clock()
-# Date and Time stamp for output file
-dateTimeStamp = time.strftime("%Y%m%d_%H%M")
-#time stamp for file name
-outputCSV = dateTimeStamp + '_' + 'DemoData' + ".csv"
 
 #Read in 'Inpatient' and 'Lab Results' data
-file1 = '/Users/jcraycraft/Dropbox/Work/PreSales/Marketing/2017_HIMSS/DiabetesReAdmitDemo/Inpatient Data (RMTD) Extract.csv'
-file2 = '/Users/jcraycraft/Dropbox/Work/PreSales/Marketing/2017_HIMSS/DiabetesReAdmitDemo/HCPyDiabetesClinical_excludeNone.csv'
+file1 = '/Users/jcraycraft/Dropbox/Work/PreSales/Marketing/2017_HIMSS/DiabetesReAdmitDemo/DemoData/Inpatient Data (RMTD) Extract.csv'
+file2 = '/Users/jcraycraft/Dropbox/Work/PreSales/Marketing/2017_HIMSS/DiabetesReAdmitDemo/DemoData/HCPyDiabetesClinical_excludeNone.csv'
 #file3 = '/Users/jcraycraft/Dropbox/Work/PreSales/Marketing/2017_HIMSS/DiabetesReAdmitDemo/superstore.csv'
 # Read CSV into dataframe (two files)
 df1 = pd.read_csv(file1, encoding='utf-16', sep='\t', error_bad_lines=False)
@@ -182,9 +178,6 @@ fields = ['Uniqueid','From Date','To Date','Length of Stay','Unique ID Join','To
 DemoData = DemoData.drop(fields, axis=1)
 
 
-
-#new code start
-
 uniqueDiabetes22 = DemoData[DemoData['DRG Text'].str.contains('DIABETES')==True]['MRN'].tolist() 
 
 
@@ -207,13 +200,16 @@ len(x_1)
 #Give it same name for Tableau "smart" join
 df2['MRN']=pd.Series(x_1)
 
-df2.to_csv('labs.csv', index = False)
-#new code end
+# Date and Time stamp for output file
+dateTimeStamp = time.strftime("%Y%m%d_%H%M")
 
+#output file names, with time stamp for file name
+outputCSV1 = dateTimeStamp + '_' + 'InpatientData' + ".csv"
+outputCSV2 = dateTimeStamp + '_' + 'LabsData' + ".csv"
 
-
-#output files
-DemoData.to_csv(outputCSV, index = False)
+#write csv outputs
+df2.to_csv(outputCSV2, index = False)
+DemoData.to_csv(outputCSV1, index = False)
 
 
 print("------------------------------------------------")
