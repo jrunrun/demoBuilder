@@ -85,8 +85,7 @@ for (k,v), (k2,v2) in zip(avgVar_dict2.items(), indy_dict.items()):
     #print(tmp_iterator)
     #for tmp_item in tmp_iterator:
     #2
-    sub_df = pd.DataFrame()    
-    
+    sub_df = pd.DataFrame()     
     for idx, tmp_item in enumerate(tmp_iterator): 
         ct_2+=1
         print('#2: ',ct_2)
