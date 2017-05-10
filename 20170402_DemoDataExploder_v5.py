@@ -12,13 +12,65 @@ print "Demo data exploder starting..."
 startTime = time.clock()
 
 #Read in 'Inpatient' and 'Lab Results' data
-file1 = '/Users/jcraycraft/Dropbox/Work/PreSales/Marketing/2017_HIMSS/DiabetesReAdmitDemo/DemoData/Inpatient Data (RMTD) Extract.csv'
-file2 = '/Users/jcraycraft/Dropbox/Work/PreSales/Marketing/2017_HIMSS/DiabetesReAdmitDemo/DemoData/HCPyDiabetesClinical_excludeNone.csv'
+file1 = '/Users/jcraycraft/Dropbox/Work/PreSales/Marketing/2017_HIMSS/DiabetesReAdmitDemo/DemoData2/Inpatient Data (RMTD) Extract.csv'
+file2 = '/Users/jcraycraft/Dropbox/Work/PreSales/Marketing/2017_HIMSS/DiabetesReAdmitDemo/DemoData2/HCPyDiabetesClinical_excludeNone2.csv'
 #file3 = '/Users/jcraycraft/Dropbox/Work/PreSales/Marketing/2017_HIMSS/DiabetesReAdmitDemo/superstore.csv'
 # Read CSV into dataframe (two files)
 df1 = pd.read_csv(file1, encoding='utf-16', sep='\t', error_bad_lines=False)
 df2 = pd.read_csv(file2)
 #df3 = pd.read_csv(file3)
+
+
+#reduce cost of DRG = 'DIABETES W/O CC/MCC'
+# indices_NoComplications = df1[df1['DRG Text']=='DIABETES W/O CC/MCC'].index.tolist()
+# for ind3 in indices_NoComplications:
+#     df1.loc[df1.index==ind3,'Total Charges'] = df1.loc[df1.index==ind3,'Total Charges']*0.1
+
+#reduce all charges to fall inline with avg daily found on google
+df1['Total Charges'] = df1['Total Charges'] * 0.75
+
+#grab indices for each type of diabetes
+diab_mcc_idx = df1[df1['DRG Text']=='DIABETES W MCC'].index.values.tolist()
+diab_cc_idx = df1[df1['DRG Text']=='DIABETES W CC'].index.values.tolist()
+diab_idx = df1[df1['DRG Text']=='DIABETES W/O CC/MCC'].index.values.tolist()
+diab_all_idx = diab_mcc_idx + diab_cc_idx + diab_idx
+
+#grab Uniqueid's for each type of diabetes
+diab_mcc = df1[df1['DRG Text']=='DIABETES W MCC']['Uniqueid'].unique().tolist()
+diab_cc = df1[df1['DRG Text']=='DIABETES W CC']['Uniqueid'].unique().tolist()
+diab = df1[df1['DRG Text']=='DIABETES W/O CC/MCC']['Uniqueid'].unique().tolist()
+diab_all = diab_mcc + diab_cc + diab
+
+#adjust charges for each type of diabetes
+#using index as filter
+df1.loc[diab_mcc_idx,'Total Charges'] = df1.loc[diab_mcc_idx,'Total Charges']*1.1
+df1.loc[diab_cc_idx,'Total Charges'] = df1.loc[diab_cc_idx,'Total Charges']*0.9
+df1.loc[diab_idx,'Total Charges'] = df1.loc[diab_idx,'Total Charges']*0.75
+
+
+
+# #grab indexes for each type of diabetes
+# diab_mcc = df1[df1['DRG Text']=='DIABETES W MCC']['Uniqueid'].unique().tolist()
+# diab_cc = df1[df1['DRG Text']=='DIABETES W CC']['Uniqueid'].unique().tolist()
+# diab = df1[df1['DRG Text']=='DIABETES W/O CC/MCC']['Uniqueid'].unique().tolist()
+
+# #grab indices for diabetes patients from source
+# diab_all = diab_mcc + diab_cc + diab
+
+# #adjust charges for each type of diabetes
+# df1.loc[diab_mcc,'Total Charges'] = df1.loc[diab_mcc,'Total Charges']*1.3
+# df1.loc[diab_cc,'Total Charges'] = df1.loc[diab_cc,'Total Charges']*0.9
+# df1.loc[diab,'Total Charges'] = df1.loc[diab,'Total Charges']*0.1
+
+
+df1['days'] = pd.to_datetime(df1['To Date']) - pd.to_datetime(df1['From Date'])
+# df1['days'] = df1['Disch_tmp'] - df1['Admit_tmp'] 
+# +1 to include current day
+df1['days'] = df1['days'].dt.days + 1 
+
+#daily unit costs = total charges/LOS
+df1['Charge_perDay_tmp'] = df1['Total Charges'] / df1['days']
+df1['Charge_perDay_tmp'] = df1['Charge_perDay_tmp'].astype('int')
 
 #today's date
 today = pd.to_datetime('today')
@@ -50,6 +102,7 @@ avgVar_dict = {'Mon':[260,45],'Tues':[277,41],'Wed':[250,20],'Thur':[230,30],'Fr
 #df1_idx = df1.index.values.tolist()
     #ID level; specify ID; e.g. 'Uniqueid'
 df1_idx = df1['Uniqueid'].unique().tolist()
+
 
 #YoY growth; for now this is the same across all years; enhance later to vary by year
 growth = [[1.0,.03],[1.15,.05],[1.175,.07],[1.20,.09],[1.225,.10]]
@@ -95,9 +148,26 @@ for (k,v), (k2,v2) in zip(avgVar_dict.items(), indy_dict.items()):
 
     output2['Uniqueid'] = output2['indices']
     output2 = output2.drop('indices', axis=1)      
-    output2.to_csv('2017_04_06_output2_v5.csv', index = False)
+    #output2.to_csv('2017_04_06_output2_v5.csv', index = False)
 
-df1.to_csv('2017_04_06_df1_v5.csv', index = False)
+#reset index for 400K+ row dataframe output
+output2 = output2.reset_index(drop=True)
+#create list of unique months
+output2['Admit_month'] = output2['Admit_DT'].dt.month
+months = output2['Admit_month'].unique().tolist()
+
+#create diabetes patients @ specified % of population on monthly basis
+#using Uniqueid as filter
+for month in months:
+    #random percent between 6% and 9%
+    test_frac = random.uniform(.05,.09)
+    indices = output2[output2['Admit_month']==month].sample(frac = test_frac).index.tolist()
+    for ind in indices:
+        #DemoData.loc[DemoData.index==ind,'DRG Text']=random.choice(uniqueDiabetes2)
+        output2.loc[ind,'Uniqueid']=random.choice(diab_all)
+
+
+#df1.to_csv('2017_04_06_df1_v5.csv', index = False)
 DemoData = pd.merge(df1, output2, on='Uniqueid', how='inner')
 
 #create quantities for both dist and tail for LOS
@@ -110,71 +180,128 @@ df_tail = df_rows - df_dist
 print("tail: ",df_tail)
 
 #two distributions for discharge dates so the LOS bins are realistic
+#return list of disbributions
+#input mean (mu) & std deviation (sigma)
+def dist_builder(length,mu1,sigma1,mu2,sigma2,base,percent_normal):
+    df2 = pd.DataFrame()
+    N1 = int(length * percent_normal)
+    N2 = length - N1
+    tmp_n1 = np.random.normal(mu1, sigma1, N2)
+    tmp_n1 = abs(tmp_n1)
+    tmp_n2 = np.random.normal(mu2, sigma2, N1)
+    tmp_n2 = abs(tmp_n2)
 
-total = len(DemoData)
+    a = pd.Series(tmp_n1+1)
+    a_list = a.astype('int').tolist()
 
-N1 = int(len(DemoData) * 0.8)
-N2 = total - N1
+    b = pd.Series((tmp_n2*base)+1)
+    b_list = b.astype('int').tolist()
 
-#20% of population have higher LOS with greater variability
-mu1, sigma1 = 150, 80 # mean and standard deviation
-tmp_n1 = np.random.normal(mu1, sigma1, N2)
+    total_list = a_list + b_list
+    return(total_list)
 
-#80% of population have pretty similar LOS
-mu2, sigma2 = 0, 1 # mean and standard deviation
-tmp_n2 = np.random.normal(mu2, sigma2, N1)
-
-df_a = pd.DataFrame()
-df_a['a'] = tmp_n1
-df_a['a'] = abs(df_a['a'])
-#comment out below line if you want some LOS=0 days
-df_a['a'] = df_a['a']+1
-df_a['a'] = df_a['a'].astype(int)
-a_list = df_a['a'].tolist()
-
-df_b = pd.DataFrame()
-df_b['b'] = tmp_n2
-df_b['b'] = abs(df_b['b'])
-df_b['b'] = df_b['b']*15
-#comment out below line if you want some LOS=0 days
-df_b['b'] = df_b['b']+1
-df_b['b'] = df_b['b'].astype(int)
-b_list = df_b['b'].tolist()
-
-total_list = a_list + b_list
-
-DemoData['delta'] = total_list
+length_df = len(DemoData)
+DemoData['delta'] = dist_builder(length_df,17,11,5,2,1,.80)
 
 DemoData['Disch_DT'] = DemoData['Admit_DT'] + DemoData['delta'].map(dt.timedelta)
 DemoData = DemoData.drop('delta', axis=1)
+
+
+#grab indexes for each type of diabetes
+diab_mcc = DemoData[DemoData['DRG Text']=='DIABETES W MCC'].index.tolist()
+diab_cc = DemoData[DemoData['DRG Text']=='DIABETES W CC'].index.tolist()
+diab = DemoData[DemoData['DRG Text']=='DIABETES W/O CC/MCC'].index.tolist()
+
+# #create distributions for LOS
+# DemoData.loc[diab_mcc,'delta_diab_mcc'] = dist_builder(len(diab_mcc),100,75,0,1,16,.30)
+# DemoData.loc[diab_cc,'delta_diab_cc'] = dist_builder(len(diab_cc),85,65,0,1,13,.60)
+# DemoData.loc[diab,'delta_diab'] = dist_builder(len(diab),75,35,0,1,10,.80)
+
+#create distributions for LOS
+DemoData.loc[diab_mcc,'delta_diab_mcc'] = dist_builder(len(diab_mcc),30,18,12,8,1,.80)
+DemoData.loc[diab_cc,'delta_diab_cc'] = dist_builder(len(diab_cc),24,15,8,4,1,.80)
+DemoData.loc[diab,'delta_diab'] = dist_builder(len(diab),17,11,5,2,1,.80)
+
+#type cast to timedelta days
+DemoData['delta_diab_mcc'] = pd.to_timedelta(DemoData['delta_diab_mcc'], unit='d')
+DemoData['delta_diab_cc'] = pd.to_timedelta(DemoData['delta_diab_cc'], unit='d')
+DemoData['delta_diab'] = pd.to_timedelta(DemoData['delta_diab'], unit='d')
+
+#Create new Discharge dates from timedeltas
+DemoData.loc[diab_mcc,'Disch_DT'] = DemoData.loc[diab_mcc,'delta_diab_mcc'] + DemoData.loc[diab_mcc,'Admit_DT']
+DemoData.loc[diab_cc,'Disch_DT'] = DemoData.loc[diab_cc,'delta_diab_cc'] + DemoData.loc[diab_cc,'Admit_DT']
+DemoData.loc[diab,'Disch_DT'] = DemoData.loc[diab,'delta_diab'] + DemoData.loc[diab,'Admit_DT']
+
 
 #ENHANCE THIS LATER TO REDUCE NUMBER OF NULLS; MAYBE THIS WOULD BE REALISTIC DATA THOUGH; 14K 'Disch_DT' NULLS CURRENTLY
 #clear out any discharges beyond current date
 DemoData.ix[DemoData.Disch_DT >= today,'Disch_DT'] = np.NaN
 
+#set temp discharge to today to get total charges thru current date for patients not discharged yet; still in hospital
+DemoData['Disch_DT_tmp2'] = DemoData['Disch_DT']
+DemoData.ix[DemoData.Disch_DT >= today,'Disch_DT_tmp2'] = today
+
+
+#calc LOS = to_date-from_date
+# DemoData['Admit_tmp2'] = pd.to_datetime(DemoData['Admit_DT'])
+# DemoData['Disch_tmp2'] = pd.to_datetime(DemoData['Disch_DT_tmp2'])
+# DemoData['days2'] = DemoData['Disch_tmp2'] - DemoData['Admit_tmp2'] 
+
+#calc total charges based off LOS x Charge_perDay_tmp
+DemoData['days2'] = pd.to_datetime(DemoData['Disch_DT_tmp2']) - pd.to_datetime(DemoData['Admit_DT'])
+DemoData['days2'] = DemoData['days2'].dt.days + 1
+DemoData['TotalCharges2'] = DemoData['days2'] * DemoData['Charge_perDay_tmp']
 
 #ENHANCE THIS LATER FOR TRUE READMITS
 #create unique MRN for every row; if you want true reAdmits adjust total to <total
 mrn = []
-mrn = random.sample(range(1000000, 9999999), total)
+mrn = random.sample(range(1000000, 9999999), length_df)
 DemoData['MRN'] = mrn
 
-#create list of unique diabetes releated diagnosis by searching 'DRG Text' column
-uniqueDiabetes2 = DemoData[DemoData['DRG Text'].str.contains('DIABETES')==True]['DRG Text'].tolist()
+# #create list of diabetes releated diagnosis by searching 'DRG Text' column
+# uniqueDiabetes2 = DemoData[DemoData['DRG Text'].str.contains('DIABETES')==True]['DRG Text'].tolist()
+
 #create list of unique months
 DemoData['Admit_month'] = DemoData['Admit_DT'].dt.month
 months = DemoData['Admit_month'].unique().tolist()
 
-#create diabetes patients @ specified % of population on monthly basis
+# #create diabetes patients @ specified % of population on monthly basis
+# for month in months:
+#     #random percent between 6% and 9%
+#     test_frac = random.uniform(.05,.09)
+#     indices = DemoData[DemoData['Admit_month']==month].sample(frac = test_frac).index.tolist()
+#     for ind in indices:
+#         DemoData.loc[DemoData.index==ind,'DRG Text']=random.choice(uniqueDiabetes2)
+
+
+
+#Readmits flag
+#plants Readmitted flag @ specified % of population on monthly basis
 for month in months:
-    #random percent between 6% and 9%
-    test_frac = random.uniform(.06,.09)
-    indices = DemoData[DemoData['Admit_month']==month].sample(frac = test_frac).index.tolist()
-    for ind in indices:
-        DemoData.loc[DemoData.index==ind,'DRG Text']=random.choice(uniqueDiabetes2)
+    test_frac2 = random.uniform(.07,.23)
+    indices = DemoData[DemoData['Admit_month']==month].sample(frac = test_frac2).index.tolist()
+    DemoData.loc[indices,'Readmitted']='Yes'
+
+
+#DemoData.loc[DemoData['Readmitted']=='Yes']['Total Charges'] = DemoData.loc['Total Charges']*1.3
+#DemoData.loc[DemoData['Readmitted']!='Yes']['Total Charges'] = DemoData.loc['Total Charges']*.8
+#DemoData.loc[DemoData['DRG Text']=='DIABETES W/O CC/MCC']['Total Charges'] = DemoData.loc['Total Charges']*.5
+
+#May5
+# #increase costs for readmit patients relative to other patient population
+# indices_readmit = DemoData[DemoData['Readmitted']=='Yes'].index.tolist()
+# for ind1 in indices_readmit:
+#     DemoData.loc[DemoData.index==ind1,'Total Charges'] = DemoData.loc[DemoData.index==ind1,'Total Charges']*1.3
+# # #decrease costs for readmit patients relative to other patient population
+# indices_NotReadmit = DemoData[DemoData['Readmitted']!='Yes'].index.tolist()
+# for ind2 in indices_NotReadmit:
+#     DemoData.loc[DemoData.index==ind2,'Total Charges2'] = DemoData.loc[DemoData.index==ind2,'Total Charges']*0.8
+
+
+
         
 #remove legacy fields
-fields = ['Uniqueid','From Date','To Date','Length of Stay','Unique ID Join','To Day','Zip Lon','Zip Lat','Miles From Provider']
+fields = ['Uniqueid','From Date','To Date','Length of Stay','Unique ID Join','To Day','Zip Lon','Zip Lat','Miles From Provider','delta_diab_mcc','delta_diab_cc','delta_diab','Disch_DT_tmp2','days2']
 DemoData = DemoData.drop(fields, axis=1)
 
 
@@ -194,7 +321,7 @@ x=set(uniqueDiabetes22).intersection(ID_tmp)
 
 #ENHANCE TO DETERMINE # BASED OFF LENGTH OF LABS FILE DF
 #randomly select 148 OR 987 indices
-x_1 = random.sample(x,987)
+x_1 = random.sample(x,1974)
 len(x_1)
 
 #Give it same name for Tableau "smart" join
