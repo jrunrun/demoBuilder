@@ -160,7 +160,7 @@ months = output2['Admit_month'].unique().tolist()
 #using Uniqueid as filter
 for month in months:
     #random percent between 6% and 9%
-    test_frac = random.uniform(.05,.09)
+    test_frac = random.uniform(.03,.05)
     indices = output2[output2['Admit_month']==month].sample(frac = test_frac).index.tolist()
     for ind in indices:
         #DemoData.loc[DemoData.index==ind,'DRG Text']=random.choice(uniqueDiabetes2)
@@ -233,24 +233,7 @@ DemoData.loc[diab_cc,'Disch_DT'] = DemoData.loc[diab_cc,'delta_diab_cc'] + DemoD
 DemoData.loc[diab,'Disch_DT'] = DemoData.loc[diab,'delta_diab'] + DemoData.loc[diab,'Admit_DT']
 
 
-#ENHANCE THIS LATER TO REDUCE NUMBER OF NULLS; MAYBE THIS WOULD BE REALISTIC DATA THOUGH; 14K 'Disch_DT' NULLS CURRENTLY
-#clear out any discharges beyond current date
-DemoData.ix[DemoData.Disch_DT >= today,'Disch_DT'] = np.NaN
 
-#set temp discharge to today to get total charges thru current date for patients not discharged yet; still in hospital
-DemoData['Disch_DT_tmp2'] = DemoData['Disch_DT']
-DemoData.ix[DemoData.Disch_DT >= today,'Disch_DT_tmp2'] = today
-
-
-#calc LOS = to_date-from_date
-# DemoData['Admit_tmp2'] = pd.to_datetime(DemoData['Admit_DT'])
-# DemoData['Disch_tmp2'] = pd.to_datetime(DemoData['Disch_DT_tmp2'])
-# DemoData['days2'] = DemoData['Disch_tmp2'] - DemoData['Admit_tmp2'] 
-
-#calc total charges based off LOS x Charge_perDay_tmp
-DemoData['days2'] = pd.to_datetime(DemoData['Disch_DT_tmp2']) - pd.to_datetime(DemoData['Admit_DT'])
-DemoData['days2'] = DemoData['days2'].dt.days + 1
-DemoData['TotalCharges2'] = DemoData['days2'] * DemoData['Charge_perDay_tmp']
 
 #ENHANCE THIS LATER FOR TRUE READMITS
 #create unique MRN for every row; if you want true reAdmits adjust total to <total
@@ -265,43 +248,48 @@ DemoData['MRN'] = mrn
 DemoData['Admit_month'] = DemoData['Admit_DT'].dt.month
 months = DemoData['Admit_month'].unique().tolist()
 
-# #create diabetes patients @ specified % of population on monthly basis
-# for month in months:
-#     #random percent between 6% and 9%
-#     test_frac = random.uniform(.05,.09)
-#     indices = DemoData[DemoData['Admit_month']==month].sample(frac = test_frac).index.tolist()
-#     for ind in indices:
-#         DemoData.loc[DemoData.index==ind,'DRG Text']=random.choice(uniqueDiabetes2)
-
 
 
 #Readmits flag
 #plants Readmitted flag @ specified % of population on monthly basis
 for month in months:
-    test_frac2 = random.uniform(.07,.23)
+    test_frac2 = random.uniform(.07,.15)
     indices = DemoData[DemoData['Admit_month']==month].sample(frac = test_frac2).index.tolist()
     DemoData.loc[indices,'Readmitted']='Yes'
 
+#grab readmits
+readmits = DemoData[DemoData['Readmitted']=='Yes'].index.tolist()
 
-#DemoData.loc[DemoData['Readmitted']=='Yes']['Total Charges'] = DemoData.loc['Total Charges']*1.3
-#DemoData.loc[DemoData['Readmitted']!='Yes']['Total Charges'] = DemoData.loc['Total Charges']*.8
-#DemoData.loc[DemoData['DRG Text']=='DIABETES W/O CC/MCC']['Total Charges'] = DemoData.loc['Total Charges']*.5
-
-#May5
-# #increase costs for readmit patients relative to other patient population
-# indices_readmit = DemoData[DemoData['Readmitted']=='Yes'].index.tolist()
-# for ind1 in indices_readmit:
-#     DemoData.loc[DemoData.index==ind1,'Total Charges'] = DemoData.loc[DemoData.index==ind1,'Total Charges']*1.3
-# # #decrease costs for readmit patients relative to other patient population
-# indices_NotReadmit = DemoData[DemoData['Readmitted']!='Yes'].index.tolist()
-# for ind2 in indices_NotReadmit:
-#     DemoData.loc[DemoData.index==ind2,'Total Charges2'] = DemoData.loc[DemoData.index==ind2,'Total Charges']*0.8
+#create LOS for readmits
+#DemoData.loc[diab_mcc,'delta_diab_mcc'] = dist_builder(len(diab_mcc),30,18,12,8,1,.80)
+DemoData.loc[readmits,'delta_readmits'] = dist_builder(len(readmits),30,18,12,8,1,.80)
 
 
+#type cast to timedelta days
+DemoData['delta_readmits'] = pd.to_timedelta(DemoData['delta_readmits'], unit='d')
 
-        
+#Create new Discharge dates for readmits from timedeltas
+DemoData.loc[readmits,'Disch_DT'] = DemoData.loc[readmits,'delta_readmits'] + DemoData.loc[readmits,'Admit_DT']
+
+#inflate costs for readmits by 15%
+DemoData.loc[readmits,'Charge_perDay_tmp'] = DemoData.loc[readmits,'Charge_perDay_tmp'] * 1.08
+
+#clear out any discharges beyond current date
+DemoData.ix[DemoData.Disch_DT >= today,'Disch_DT'] = np.NaN
+
+#set temp discharge to today to get total charges thru current date for patients not discharged yet; still in hospital
+DemoData['Disch_DT_tmp2'] = DemoData['Disch_DT']
+DemoData.ix[DemoData.Disch_DT >= today,'Disch_DT_tmp2'] = today
+
+#calc total charges based off LOS x Charge_perDay_tmp
+DemoData['days2'] = pd.to_datetime(DemoData['Disch_DT_tmp2']) - pd.to_datetime(DemoData['Admit_DT'])
+DemoData['days2'] = DemoData['days2'].dt.days + 1
+DemoData['TotalCharges2'] = DemoData['days2'] * DemoData['Charge_perDay_tmp']
+DemoData['Total Charges'] = DemoData['TotalCharges2']
+
+
 #remove legacy fields
-fields = ['Uniqueid','From Date','To Date','Length of Stay','Unique ID Join','To Day','Zip Lon','Zip Lat','Miles From Provider','delta_diab_mcc','delta_diab_cc','delta_diab','Disch_DT_tmp2','days2']
+fields = ['TotalCharges2','From Day', 'days', 'Charge_perDay_tmp' , 'Disch Stat', 'F33', 'delta_readmits', 'Admit_month', 'Uniqueid','From Date','To Date','Length of Stay','Unique ID Join','To Day','Zip Lon','Zip Lat','Miles From Provider','delta_diab_mcc','delta_diab_cc','delta_diab','Disch_DT_tmp2','days2']
 DemoData = DemoData.drop(fields, axis=1)
 
 
@@ -319,13 +307,17 @@ ID_tmp = DemoData[(DemoData['Admit_DT']>=start)&(DemoData['Admit_DT']<end)]['MRN
 #return set with ID's common to both <90days and DRG=diabetes
 x=set(uniqueDiabetes22).intersection(ID_tmp)
 
+print("number of diab in last 90 days:")
+print(len(x))
 #ENHANCE TO DETERMINE # BASED OFF LENGTH OF LABS FILE DF
 #randomly select 148 OR 987 indices
-x_1 = random.sample(x,1974)
+x_1 = random.sample(x,len(x))
 len(x_1)
 
 #Give it same name for Tableau "smart" join
 df2['MRN']=pd.Series(x_1)
+df2_trim = df2[0:(len(x)-1)]
+df2 = df2_trim
 
 # Date and Time stamp for output file
 dateTimeStamp = time.strftime("%Y%m%d_%H%M")
